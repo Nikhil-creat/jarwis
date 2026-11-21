@@ -55,3 +55,7 @@ Import the repo on Vercel (static, no build settings). The site expects to be se
 ## License
 
 MIT. See `LICENSE`.
+
+## AI on Vercel (no separate server)
+
+`api/chat.py` is a Vercel serverless function. It reads `GROQ_API_KEY` and `GEMINI_API_KEY` from environment variables, lists each provider's models, picks a fast and a deep model automatically, and falls back from one provider to the other. `GET /api/chat` shows what was detected, and `/status/` displays it. The chat dock and the Command center's "Plan with AI" button both use it. See `DEPLOY.md`.

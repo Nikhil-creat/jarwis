@@ -6,6 +6,7 @@
 - [Command center](https://jarwis.ai/command-center/): live preview
 - [Status](https://jarwis.ai/status/): live checks
 - [Roadmap](https://jarwis.ai/roadmap/): what ships next
+- [Builder](https://jarwis.ai/builder/): who built Jarwis
 - [Assistants](https://jarwis.ai/assistants/): six clusters of assistants
 - [Architecture](https://jarwis.ai/architecture/): how missions flow
 - [Security](https://jarwis.ai/security/): guardrails and approvals
