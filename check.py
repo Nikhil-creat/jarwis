@@ -1,14 +1,14 @@
 """Pre-push check: run `python3 check.py` inside the project folder."""
 import os, re, sys
 need = ["index.html", "404.html", "faq/index.html", "contact/index.html", "resume/index.html", "assistants/index.html",
-        "api/chat.py", "assets/ai.js", "assets/resume.js", "assets/site.css", "sitemap.xml", "robots.txt", "llms.txt",
+        "api/chat.py", "assets/ai.js", "assets/resume.js", "assets/interview.js", "interview/index.html", "assets/site.css", "sitemap.xml", "robots.txt", "llms.txt",
         "favicon.ico", "og.png", "vercel.json"]
 bad = [f"missing file: {f}" for f in need if not os.path.exists(f)]
 api = open("api/chat.py").read() if os.path.exists("api/chat.py") else ""
 if "urlparse" not in api:
     bad.append("api/chat.py is an old version (no origin fix)")
-if "RESUME" not in api:
-    bad.append("api/chat.py has no resume support")
+if "COVER" not in api or "IQ" not in api:
+    bad.append("api/chat.py has no cover letter or interview support")
 pat = re.compile(r"gsk_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_\-]{30,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----")
 for root, dirs, files in os.walk("."):
     dirs[:] = [d for d in dirs if d not in (".git", "node_modules")]

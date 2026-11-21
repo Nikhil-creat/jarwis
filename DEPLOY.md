@@ -28,3 +28,6 @@ Vercel -> Settings -> Domains -> add it and copy the DNS records to your registr
 python3 check.py      # must print: OK: ready to push
 ```
 Then open https://jarwis-six.vercel.app/status/ after Vercel finishes. The line "Site build" must show a new date and time. Always use this production address. Long addresses with random letters are frozen old deployments.
+
+## Which address to open
+Always test on https://jarwis-six.vercel.app (the main address). Vercel also shows long addresses with random letters, for example ending in -nikhil-creats-projects.vercel.app. Those are frozen copies of one old deployment, so they never show your latest work.

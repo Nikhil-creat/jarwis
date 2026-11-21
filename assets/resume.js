@@ -14,7 +14,7 @@ add('Projects',(r.projects||[]).flatMap(p=>[[p.name,p.tech].filter(Boolean).join
 add('Education',(r.education||[]).map(e=>[e.degree,e.school,e.dates,e.detail].filter(Boolean).join(' | ')));add('Certifications and achievements',(r.extras||[]).map(x=>'- '+x));return o.join('\n')}
 if(typeof document==='undefined'){module.exports={kws,score,draft,plain,lines};return}
 const $=id=>document.getElementById(id),T=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x)e.textContent=x;return e};
-const ids=['rn','re','rp','rl','rg','rli','rw','rt','rj','rq','red','rs','rpr','rex','rc'],K='jw-resume';
+const ids=['rn','re','rp','rl','rg','rli','rw','rt','rj','rco','rq','red','rs','rpr','rex','rc'],K='jw-resume';
 const val=()=>{const v={};ids.forEach(i=>v[i]=($(i).value||'').trim());return v};
 try{const s=JSON.parse(localStorage.getItem(K)||'{}');ids.forEach(i=>{if(s[i])$(i).value=s[i]})}catch(e){}
 let tm,last='';ids.forEach(i=>$(i).addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(()=>{try{localStorage.setItem(K,JSON.stringify(val()))}catch(e){}},400)}));
@@ -45,5 +45,10 @@ $('rclr').onclick=()=>{ids.forEach(i=>{$(i).value=''});try{localStorage.removeIt
 const dl=(n,t,m)=>{const u=URL.createObjectURL(new Blob([t],{type:m})),a=T('a');a.href=u;a.download=n;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)};
 $('rpdf').onclick=()=>window.print();$('rtxt').onclick=()=>dl('resume.txt',last,'text/plain');
 $('rdoc').onclick=()=>dl('resume.doc','<html><head><meta charset="utf-8"><style>body{font-family:Arial;font-size:10pt}h2{text-align:center}h3{border-bottom:1px solid #000}</style></head><body>'+$('rv').innerHTML+'</body></html>','application/msword');
+$('rcl').onclick=async()=>{const v=val();if(!check(v))return;st('Writing your cover letter...');
+const msg=JSON.stringify({name:v.rn,company:v.rco.slice(0,80),target_role:v.rt.slice(0,120),job_description:v.rj.slice(0,1800),extra_request:v.rq.slice(0,300),education:v.red.slice(0,500),skills:v.rs.slice(0,500),projects:v.rpr.slice(0,1500),experience:v.rex.slice(0,1200),achievements:v.rc.slice(0,400)});
+try{const x=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'cover',message:msg})});const j=await x.json();if(!x.ok||!j.reply)throw 0;$('rcv').value=j.reply;$('cvw').hidden=false;st('Cover letter ready. Edit it, then copy or download.');$('cvw').scrollIntoView({behavior:'smooth'})}catch(_){st('The AI could not write the letter right now. Try again in a moment.')}};
+$('rcvc').onclick=async()=>{try{await navigator.clipboard.writeText($('rcv').value);st('Letter copied.')}catch(e){st('Copy is blocked by your browser. Select the text and copy it.')}};
+$('rcvd').onclick=()=>dl('cover-letter.txt',$('rcv').value,'text/plain');
 $('rcp').onclick=async()=>{try{await navigator.clipboard.writeText(last);st('Copied.')}catch(e){st('Copy is blocked by your browser. Use Download .txt instead.')}};
 })();

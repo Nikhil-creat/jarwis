@@ -30,6 +30,14 @@ def clean_resume(o):
             "education": [{"degree": S(D(e).get("degree"), 100), "school": S(D(e).get("school"), 100), "dates": S(D(e).get("dates"), 40), "detail": S(D(e).get("detail"), 160)} for e in L(o.get("education"), 3)],
             "extras": [S(x, 160) for x in L(o.get("extras"), 6)],
             "gaps": [S(x, 40) for x in L(o.get("gaps"), 8)]}
+COVER = ("You are the Resume and Career Coach assistant of Jarwis. The input is JSON with a candidate's facts and a target job. Write a concise, honest cover letter in plain text: at most 250 words, three short paragraphs "
+         "(why this role, the most relevant proof from the facts, a confident close). Use ONLY the facts provided and never invent employers, metrics or tools. If no company is given, address it to the Hiring Team. "
+         "No placeholders in square brackets. Start with 'Dear' and end with 'Sincerely,' followed by the candidate's name.")
+IQ = ("You are the Interview Prep Coach assistant of Jarwis. Return ONLY a JSON array of exactly 6 objects {\"q\": question, \"type\": \"Technical\" or \"Behavioral\" or \"Situational\"}. "
+      "Tailor them to the role, level and job description. Make them realistic, specific and answerable in one to three minutes.")
+IFB = ("You are an honest interview coach. Return ONLY one JSON object {\"score\": integer 1 to 10, \"strengths\": up to 3 short strings, \"improve\": up to 3 short strings, \"better\": a stronger sample answer under 120 words}. "
+       "Judge the candidate's answer to the question for the role. Be specific. In the sample answer reuse only ideas from the candidate's answer plus general best practice, and do not invent employers or exact numbers.")
+D = lambda x: x if isinstance(x, dict) else {}
 _C = {"t": 0, "v": {}}
 RL = {}
 
@@ -91,8 +99,24 @@ class handler(BaseHTTPRequestHandler):
         try:
             n = min(int(self.headers.get("content-length", 0)), 30000)
             j = json.loads(self.rfile.read(n) or b"{}")
-            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode == "resume" else 1500]
+            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode in ("resume", "cover") else 4000 if mode in ("iq", "ifb") else 1500]
             if not m.strip(): return self._send(400, {"reply": "Say something first."})
+            if mode == "cover":
+                text, p, mod = complete([{"role": "system", "content": COVER}, {"role": "user", "content": m}], "deep", 1500)
+                return self._send(200, {"reply": text.strip()[:3000], "provider": p, "model": mod})
+            if mode == "iq":
+                text, p, mod = complete([{"role": "system", "content": IQ}, {"role": "user", "content": m}], "deep", 1500)
+                arr = json.loads(text[text.find("["):text.rfind("]") + 1])
+                qs = [{"q": S(D(x).get("q")), "type": S(D(x).get("type"), 20)} for x in (arr if isinstance(arr, list) else [])[:8] if S(D(x).get("q"))]
+                if not qs: raise ValueError("no questions")
+                return self._send(200, {"questions": qs, "provider": p, "model": mod})
+            if mode == "ifb":
+                text, p, mod = complete([{"role": "system", "content": IFB}, {"role": "user", "content": m}], "deep", 1500)
+                o = D(json.loads(text[text.find("{"):text.rfind("}") + 1]))
+                try: sc = max(1, min(10, int(o.get("score"))))
+                except (TypeError, ValueError): sc = 5
+                li = lambda x, n: [S(i, 200) for i in (x if isinstance(x, list) else [])[:n]]
+                return self._send(200, {"feedback": {"score": sc, "strengths": li(o.get("strengths"), 3), "improve": li(o.get("improve"), 3), "better": S(o.get("better"), 900)}, "provider": p, "model": mod})
             if mode == "resume":
                 text, p, mod = complete([{"role": "system", "content": RESUME}, {"role": "user", "content": m}], "deep", 3000)
                 a, b = text.find("{"), text.rfind("}")
