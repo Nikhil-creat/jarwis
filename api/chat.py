@@ -11,6 +11,25 @@ SYS = ("You are Jarwis, the commander AI of a platform that coordinates 99+ spec
 PLAN = ("Return ONLY a JSON array of exactly 6 short strings: the steps a commander AI and its specialist assistants "
         "take for the user's goal. The last step must be 'Waiting for your approval to deploy'. No other text.")
 ROUTE = ("From the list below pick the 3 assistants best suited to the user's task. Return ONLY a JSON array of exactly 3 names copied exactly from the list, no other text. List: ")
+RESUME = ("You are the Resume and Career Coach assistant of Jarwis, an expert ATS resume writer. The input is JSON with a candidate's facts and a target job. "
+          "Return ONLY one JSON object with keys: summary (max 2 sentences, tailored to the job, no pronouns), skills (array of {g: group name, items: array of strings}, max 5 groups, most job-relevant first), "
+          "experience (array of {role, org, dates, bullets}), projects (array of {name, tech, bullets}, max 3), education (array of {degree, school, dates, detail}), "
+          "extras (array of short strings for certifications or achievements), gaps (array of up to 8 important keywords from the job description that the candidate facts do not support). "
+          "Rules: use ONLY facts present in the input. Never invent employers, titles, dates, metrics, tools or degrees. Use numbers only if given. "
+          "Start bullets with a strong action verb (past tense, present tense for current work), max 22 words each, 2 to 3 bullets per item, plain text only. "
+          "Use exact job-description keywords only where the facts support them. It must fit one page: at most 12 bullets in total. If there is no work experience, return an empty experience array.")
+def S(x, k=300): return str(x or "")[:k]
+def clean_resume(o):
+    L = lambda x, n: (x if isinstance(x, list) else [])[:n]
+    D = lambda x: x if isinstance(x, dict) else {}
+    o = D(o)
+    return {"summary": S(o.get("summary"), 400),
+            "skills": [{"g": S(D(g).get("g"), 40), "items": [S(i, 40) for i in L(D(g).get("items"), 20)]} for g in L(o.get("skills"), 6)],
+            "experience": [{"role": S(D(e).get("role"), 80), "org": S(D(e).get("org"), 80), "dates": S(D(e).get("dates"), 40), "bullets": [S(b, 220) for b in L(D(e).get("bullets"), 5)]} for e in L(o.get("experience"), 4)],
+            "projects": [{"name": S(D(e).get("name"), 80), "tech": S(D(e).get("tech"), 120), "bullets": [S(b, 220) for b in L(D(e).get("bullets"), 5)]} for e in L(o.get("projects"), 4)],
+            "education": [{"degree": S(D(e).get("degree"), 100), "school": S(D(e).get("school"), 100), "dates": S(D(e).get("dates"), 40), "detail": S(D(e).get("detail"), 160)} for e in L(o.get("education"), 3)],
+            "extras": [S(x, 160) for x in L(o.get("extras"), 6)],
+            "gaps": [S(x, 40) for x in L(o.get("gaps"), 8)]}
 _C = {"t": 0, "v": {}}
 RL = {}
 
@@ -41,14 +60,14 @@ def detect():
     _C.update(t=time.time(), v=out)
     return out
 
-def complete(messages, tier):
+def complete(messages, tier, max_tokens=700):
     det, last = detect(), "no provider configured"
     for p in [x for x in ("groq", "gemini") if x in det]:
         url, env = P[p]
-        body = json.dumps({"model": det[p][tier], "messages": messages, "max_tokens": 700, "temperature": 0.4}).encode()
+        body = json.dumps({"model": det[p][tier], "messages": messages, "max_tokens": max_tokens, "temperature": 0.4}).encode()
         req = urllib.request.Request(url + "/chat/completions", body, {"Authorization": "Bearer " + os.environ[env], "Content-Type": "application/json", "User-Agent": "jarwis/1.0"})
         try:
-            j = json.load(urllib.request.urlopen(req, timeout=25))
+            j = json.load(urllib.request.urlopen(req, timeout=28))
             return j["choices"][0]["message"]["content"], p, det[p][tier]
         except Exception as e:
             last = str(e)
@@ -70,10 +89,14 @@ class handler(BaseHTTPRequestHandler):
         extra = [x.strip() for x in os.environ.get("ALLOWED_ORIGIN", "").split(",") if x.strip()]
         if org and urlparse(org).netloc != host and org not in extra: return self._send(403, {"reply": "Origin not allowed."})
         try:
-            n = min(int(self.headers.get("content-length", 0)), 12000)
+            n = min(int(self.headers.get("content-length", 0)), 30000)
             j = json.loads(self.rfile.read(n) or b"{}")
-            m, mode = str(j.get("message", ""))[:1500], j.get("mode")
+            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode == "resume" else 1500]
             if not m.strip(): return self._send(400, {"reply": "Say something first."})
+            if mode == "resume":
+                text, p, mod = complete([{"role": "system", "content": RESUME}, {"role": "user", "content": m}], "deep", 3000)
+                a, b = text.find("{"), text.rfind("}")
+                return self._send(200, {"resume": clean_resume(json.loads(text[a:b + 1])), "provider": p, "model": mod})
             clean = lambda s, k: re.sub(r"[^\w .,&/+'()-]", "", str(s))[:k]
             hist = [{"role": h["role"], "content": str(h.get("content", ""))[:1000]} for h in (j.get("history") or [])[-8:] if isinstance(h, dict) and h.get("role") in ("user", "assistant")]
             sysmsg, tier = SYS, "fast"

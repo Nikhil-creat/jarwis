@@ -2,6 +2,10 @@
 
 One commander, 99 specialist AI assistants. Jarwis plans a mission, routes work to the right assistants, and waits for your approval before anything risky happens.
 
+![Jarwis](og.png)
+
+**Live site:** https://jarwis-six.vercel.app
+
 Designed and developed by **Nikhil Chary Sriramoju**.
 
 ## Features
@@ -11,6 +15,7 @@ Designed and developed by **Nikhil Chary Sriramoju**.
 | Home | Scanner belt: product cards dissolve into the compact code an AI agent reads (canvas particles, hover, drag) |
 | Assistants | Commander-00 plus 99 assistants in six clusters. Search, filter, chat with any of them, route a task with AI, or forge your own |
 | AI | Vercel function `api/chat.py`. Auto-detects Groq and Gemini models, picks a fast and a deep model, falls back between providers |
+| Resume builder | Asks for a few details, then writes a one-page, ATS-friendly resume tailored to a pasted job description. Shows a keyword match score and an ATS checklist, exports PDF, .doc and .txt, and has an offline quick draft |
 | Command center | Plan a mission with AI, run it with checkpoints, a token budget governor, an approval gate and saved missions |
 | Chat dock | Multi-turn, voice input, spoken replies, saved history with Clear |
 | Experience | Dark mode, Ctrl/Cmd+K page jumper, installable offline app (PWA), responsive mobile menu |

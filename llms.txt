@@ -7,6 +7,7 @@
 - [Status](https://jarwis-six.vercel.app/status/): live checks
 - [Roadmap](https://jarwis-six.vercel.app/roadmap/): what ships next
 - [Builder](https://jarwis-six.vercel.app/builder/): who built Jarwis
+- [Resume builder](https://jarwis-six.vercel.app/resume/): ATS-friendly one-page resumes
 - [FAQ](https://jarwis-six.vercel.app/faq/): common questions
 - [Contact](https://jarwis-six.vercel.app/contact/): get in touch
 - [Privacy](https://jarwis-six.vercel.app/privacy/): data handling
