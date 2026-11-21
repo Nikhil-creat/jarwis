@@ -1,0 +1,6 @@
+backend/
+docker-compose.yml
+build.py
+check.py
+.github/
+*.zip

@@ -22,3 +22,9 @@ Vercel -> Settings -> Domains -> add it and copy the DNS records to your registr
 - Add the site to Google Search Console and submit /sitemap.xml.
 - Test the social preview by sharing a link in WhatsApp or LinkedIn.
 - Rotate any API key that was ever pasted into a chat or a repo.
+
+## Before every push
+```
+python3 check.py      # must print: OK: ready to push
+```
+Then open https://jarwis-six.vercel.app/status/ after Vercel finishes. The line "Site build" must show a new date and time. Always use this production address. Long addresses with random letters are frozen old deployments.

@@ -10,4 +10,5 @@ jobs:
       - run: pip install pillow
       - run: DOMAIN=https://jarwis-six.vercel.app python build.py
       - run: for f in assets/*.js sw.js; do node --check "$f"; done
+      - run: python check.py
       - run: test -f sitemap.xml && test -f 404.html

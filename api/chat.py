@@ -80,7 +80,7 @@ class handler(BaseHTTPRequestHandler):
         for k, v in (("Content-Type", "application/json"), ("Cache-Control", "no-store"), ("Content-Length", str(len(b)))): self.send_header(k, v)
         self.end_headers(); self.wfile.write(b)
     def do_GET(self):
-        d = detect(); self._send(200, {"ready": bool(d), "providers": d})
+        d = detect(); self._send(200, {"ready": bool(d), "providers": d, "version": "2026-11-21-resume"})
     def do_POST(self):
         ip, now = self.headers.get("x-forwarded-for", "?").split(",")[0], time.time()
         RL[ip] = [t for t in RL.get(ip, []) if now - t < 60] + [now]
