@@ -9,6 +9,7 @@ SYS = ("You are Jarwis, the commander AI of a platform that coordinates 99+ spec
        "Answer in at most 4 short sentences. Be warm and clear. Risky actions always need user approval.")
 PLAN = ("Return ONLY a JSON array of exactly 6 short strings: the steps a commander AI and its specialist assistants "
         "take for the user's goal. The last step must be 'Waiting for your approval to deploy'. No other text.")
+ROUTE = ("From the list below pick the 3 assistants best suited to the user's task. Return ONLY a JSON array of exactly 3 names copied exactly from the list, no other text. List: ")
 _C = {"t": 0, "v": {}}
 RL = {}
 
@@ -43,7 +44,7 @@ def complete(messages, tier):
     det, last = detect(), "no provider configured"
     for p in [x for x in ("groq", "gemini") if x in det]:
         url, env = P[p]
-        body = json.dumps({"model": det[p][tier], "messages": messages, "max_tokens": 500, "temperature": 0.4}).encode()
+        body = json.dumps({"model": det[p][tier], "messages": messages, "max_tokens": 700, "temperature": 0.4}).encode()
         req = urllib.request.Request(url + "/chat/completions", body, {"Authorization": "Bearer " + os.environ[env], "Content-Type": "application/json", "User-Agent": "jarwis/1.0"})
         try:
             j = json.load(urllib.request.urlopen(req, timeout=25))
@@ -63,15 +64,27 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         ip, now = self.headers.get("x-forwarded-for", "?").split(",")[0], time.time()
         RL[ip] = [t for t in RL.get(ip, []) if now - t < 60] + [now]
-        if len(RL[ip]) > 12: return self._send(429, {"reply": "Slow down a little and try again in a minute."})
+        if len(RL[ip]) > 20: return self._send(429, {"reply": "Slow down a little and try again in a minute."})
         allowed = os.environ.get("ALLOWED_ORIGIN")
         if allowed and self.headers.get("origin") not in (None, allowed): return self._send(403, {"reply": "Origin not allowed."})
         try:
-            n = min(int(self.headers.get("content-length", 0)), 4000)
+            n = min(int(self.headers.get("content-length", 0)), 12000)
             j = json.loads(self.rfile.read(n) or b"{}")
-            m, plan = str(j.get("message", ""))[:1500], j.get("mode") == "plan"
+            m, mode = str(j.get("message", ""))[:1500], j.get("mode")
             if not m.strip(): return self._send(400, {"reply": "Say something first."})
-            text, p, mod = complete([{"role": "system", "content": PLAN if plan else SYS}, {"role": "user", "content": m}], "deep" if plan else "fast")
+            clean = lambda s, k: re.sub(r"[^\w .,&/+'()-]", "", str(s))[:k]
+            sysmsg, tier, hist = SYS, "fast", []
+            if mode == "plan": sysmsg, tier = PLAN, "deep"
+            elif mode == "route":
+                sysmsg = ROUTE + "; ".join(clean(x, 60) for x in (j.get("names") or [])[:120])
+            elif isinstance(j.get("assistant"), dict):
+                a = j["assistant"]
+                sysmsg = (f"You are the {clean(a.get('name'), 60)} assistant on the Jarwis platform (cluster: {clean(a.get('cluster'), 40)}; tools: {clean(a.get('tools'), 300)}). "
+                          "Stay in this specialist role, give practical step-by-step help, ask one clarifying question if the request is vague, keep answers under 200 words, "
+                          "and never claim to have run tools or taken actions you cannot take. Risky actions need the user's approval.")
+                tier = "deep" if len(m) > 400 else "fast"
+                hist = [{"role": h["role"], "content": str(h.get("content", ""))[:1000]} for h in (j.get("history") or [])[-8:] if isinstance(h, dict) and h.get("role") in ("user", "assistant")]
+            text, p, mod = complete([{"role": "system", "content": sysmsg}] + hist + [{"role": "user", "content": m}], tier)
             self._send(200, {"reply": text, "provider": p, "model": mod})
         except Exception:
             self._send(502, {"reply": "The AI is unavailable right now. Check the API keys in Vercel."})
