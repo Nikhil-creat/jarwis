@@ -8,6 +8,6 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install pillow
-      - run: DOMAIN=https://jarwis.ai python build.py
+      - run: DOMAIN=https://jarwis-six.vercel.app python build.py
       - run: for f in assets/*.js sw.js; do node --check "$f"; done
       - run: test -f sitemap.xml && test -f 404.html

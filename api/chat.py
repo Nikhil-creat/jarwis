@@ -1,6 +1,7 @@
 """Vercel serverless function: GET lists auto-detected models, POST chats. Keys come from Vercel env vars."""
 import json, os, re, time, urllib.request
 from http.server import BaseHTTPRequestHandler
+from urllib.parse import urlparse
 
 P = {"groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY"),
      "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY")}
@@ -65,17 +66,20 @@ class handler(BaseHTTPRequestHandler):
         ip, now = self.headers.get("x-forwarded-for", "?").split(",")[0], time.time()
         RL[ip] = [t for t in RL.get(ip, []) if now - t < 60] + [now]
         if len(RL[ip]) > 20: return self._send(429, {"reply": "Slow down a little and try again in a minute."})
-        allowed = os.environ.get("ALLOWED_ORIGIN")
-        if allowed and self.headers.get("origin") not in (None, allowed): return self._send(403, {"reply": "Origin not allowed."})
+        org, host = self.headers.get("origin"), self.headers.get("host", "")
+        extra = [x.strip() for x in os.environ.get("ALLOWED_ORIGIN", "").split(",") if x.strip()]
+        if org and urlparse(org).netloc != host and org not in extra: return self._send(403, {"reply": "Origin not allowed."})
         try:
             n = min(int(self.headers.get("content-length", 0)), 12000)
             j = json.loads(self.rfile.read(n) or b"{}")
             m, mode = str(j.get("message", ""))[:1500], j.get("mode")
             if not m.strip(): return self._send(400, {"reply": "Say something first."})
             clean = lambda s, k: re.sub(r"[^\w .,&/+'()-]", "", str(s))[:k]
-            sysmsg, tier, hist = SYS, "fast", []
-            if mode == "plan": sysmsg, tier = PLAN, "deep"
+            hist = [{"role": h["role"], "content": str(h.get("content", ""))[:1000]} for h in (j.get("history") or [])[-8:] if isinstance(h, dict) and h.get("role") in ("user", "assistant")]
+            sysmsg, tier = SYS, "fast"
+            if mode == "plan": sysmsg, tier, hist = PLAN, "deep", []
             elif mode == "route":
+                hist = []
                 sysmsg = ROUTE + "; ".join(clean(x, 60) for x in (j.get("names") or [])[:120])
             elif isinstance(j.get("assistant"), dict):
                 a = j["assistant"]

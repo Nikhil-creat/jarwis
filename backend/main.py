@@ -7,7 +7,7 @@ def health():return {"status":"ok"}
 def clusters():return CLUSTERS
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-app.add_middleware(CORSMiddleware, allow_origins=["https://jarwis.ai"], allow_methods=["POST"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["https://jarwis-six.vercel.app"], allow_methods=["POST"], allow_headers=["*"])
 class Msg(BaseModel):
     message: str
 @app.post("/chat")
