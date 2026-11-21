@@ -1,61 +1,62 @@
 # Jarwis
 
-One commander, 99+ specialised AI assistants. Jarwis plans a mission, hands the work to the right assistants, checks it in a sandbox, and waits for your approval before anything risky happens.
+One commander, 99 specialist AI assistants. Jarwis plans a mission, routes work to the right assistants, and waits for your approval before anything risky happens.
 
-This repo is a static site plus a small FastAPI backend.
+Designed and developed by **Nikhil Chary Sriramoju**.
 
-## What is inside
+## Features
 
 | Area | Details |
 |---|---|
-| Home | Scanner belt: product cards dissolve into the compact code an AI agent reads (canvas particles, drag and hover) |
-| Command center | Scripted mission preview with checkpoints, approval gate and a token budget governor |
-| Assistants | Searchable matrix of 99 assistants in six clusters |
-| Pages | Architecture, Security, Roadmap, Status (live checks), custom 404 |
-| AI chat | "Ask Jarwis" dock with voice input and spoken replies; uses the backend when configured |
-| Productivity | Ctrl/Cmd+K page jumper, installable offline app (PWA) |
-| SEO | Canonical tags, Open Graph and Twitter cards, JSON-LD (WebSite, BreadcrumbList, ProfessionalService), `sitemap.xml`, `robots.txt`, `llms.txt`, favicon |
-| Backend | `backend/`: model router (Groq, OpenAI, Ollama with fallback), LangGraph commander with approval interrupt, Docker sandbox runner |
+| Home | Scanner belt: product cards dissolve into the compact code an AI agent reads (canvas particles, hover, drag) |
+| Assistants | Commander-00 plus 99 assistants in six clusters. Search, filter, chat with any of them, route a task with AI, or forge your own |
+| AI | Vercel function `api/chat.py`. Auto-detects Groq and Gemini models, picks a fast and a deep model, falls back between providers |
+| Command center | Plan a mission with AI, run it with checkpoints, a token budget governor, an approval gate and saved missions |
+| Chat dock | Multi-turn, voice input, spoken replies, saved history with Clear |
+| Experience | Dark mode, Ctrl/Cmd+K page jumper, installable offline app (PWA), responsive mobile menu |
+| Pages | Home, Assistants, Command center, Architecture, Security, Roadmap, Status, Builder, FAQ, Contact, Privacy, Terms, custom 404 |
+| SEO | Titles, descriptions, canonical tags, one H1 per page, breadcrumbs, Open Graph and Twitter cards, JSON-LD (WebSite, Organization and local business, Person, FAQPage, BreadcrumbList), sitemap, robots, llms.txt, humans.txt, security.txt, favicons |
 
 ## Run locally
 
 ```
-python3 build.py                 # regenerate all pages
-python3 -m http.server 8080      # open http://localhost:8080
+python3 build.py                  # regenerate all pages
+python3 -m http.server 8080       # open http://localhost:8080
 ```
 
-Set your own domain before publishing:
+Build with your own details:
 
 ```
-DOMAIN=https://yourdomain.com python3 build.py
+DOMAIN=https://yourdomain.com CONTACT_EMAIL=you@example.com \
+BIZ_LOCALITY=City BIZ_REGION=State BIZ_COUNTRY=IN BIZ_PHONE=+91... python3 build.py
 ```
 
-## Backend
+`CONTACT_EMAIL` enables the contact form and security.txt. The `BIZ_*` values add the business address to the structured data. Leave any of them out and that part is skipped.
+
+## AI keys
+
+Set these in Vercel (Settings, Environment Variables). Never commit keys.
+
+- `GROQ_API_KEY` from console.groq.com/keys
+- `GEMINI_API_KEY` from aistudio.google.com/app/apikey
+- `ALLOWED_ORIGIN` optional, extra allowed site addresses separated by commas. The site's own address is always allowed.
+
+Open `/status/` to see which models were detected.
+
+## Project layout
 
 ```
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --port 8000
+index.html, */index.html   generated pages (edit build.py, then rebuild)
+assets/                    site.css, belt.js (scanner), ai.js (chat, palette, theme), assistants.js
+api/chat.py                Vercel serverless AI endpoint
+backend/                   optional FastAPI, LangGraph commander and Docker sandbox starters
+build.py                   page generator
 ```
 
-Copy `.env.example` to `.env` and add your own keys. Never commit `.env`. To connect the chat dock, set the `jarwis-api` meta tag in `build.py` to your deployed `/chat` URL, then rebuild.
+## Privacy
 
-Full stack with Redis, Postgres, Qdrant and Ollama: `docker compose up`.
-
-## Deploy
-
-Import the repo on Vercel (static, no build settings). The site expects to be served from the domain root, so use Vercel or a custom domain rather than a GitHub Pages project URL.
-
-## Security
-
-- Risky actions (deploys, pushes, sends) always wait for human approval.
-- Keep API keys in your host's environment variables only.
-- Generated code runs in a locked-down container with no network, a memory cap and dropped capabilities.
+No accounts and no trackers. Chats are sent to the AI provider only to answer you and are not stored in a database. Chat history, saved missions, custom assistants and the theme stay in your browser.
 
 ## License
 
 MIT. See `LICENSE`.
-
-## AI on Vercel (no separate server)
-
-`api/chat.py` is a Vercel serverless function. It reads `GROQ_API_KEY` and `GEMINI_API_KEY` from environment variables, lists each provider's models, picks a fast and a deep model automatically, and falls back from one provider to the other. `GET /api/chat` shows what was detected, and `/status/` displays it. The chat dock and the Command center's "Plan with AI" button both use it. See `DEPLOY.md`.
