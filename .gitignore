@@ -1,0 +1,10 @@
+.ssh/
+.bash_history
+.lesshst
+.gitconfig
+.config/
+.env
+*.zip
+*.map
+node_modules/
+__pycache__/

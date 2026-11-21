@@ -1,0 +1,19 @@
+services:
+  web:
+    image: nginx:alpine
+    volumes: ["./:/usr/share/nginx/html:ro"]
+    ports: ["8080:80"]
+    depends_on: [api]
+  api:
+    build: ./backend
+    env_file: .env
+    ports: ["8000:8000"]
+    depends_on: [redis, postgres, qdrant]
+  redis: { image: "redis:7-alpine" }
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}", POSTGRES_DB: jarwis }
+    volumes: ["pg:/var/lib/postgresql/data"]
+  qdrant: { image: "qdrant/qdrant", volumes: ["qd:/qdrant/storage"] }
+  ollama: { image: "ollama/ollama", volumes: ["ol:/root/.ollama"] }
+volumes: { pg: {}, qd: {}, ol: {} }

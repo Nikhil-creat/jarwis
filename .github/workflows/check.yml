@@ -1,0 +1,13 @@
+name: check
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pillow
+      - run: DOMAIN=https://jarwis.ai python build.py
+      - run: for f in assets/*.js sw.js; do node --check "$f"; done
+      - run: test -f sitemap.xml && test -f 404.html

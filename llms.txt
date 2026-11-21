@@ -1,0 +1,11 @@
+# Jarwis
+> Multi-agent AI platform: one commander (Commander-00) coordinating 99+ specialised assistants with human approval for risky actions.
+
+## Pages
+- [Home](https://jarwis.ai/): overview
+- [Command center](https://jarwis.ai/command-center/): live preview
+- [Status](https://jarwis.ai/status/): live checks
+- [Roadmap](https://jarwis.ai/roadmap/): what ships next
+- [Assistants](https://jarwis.ai/assistants/): six clusters of assistants
+- [Architecture](https://jarwis.ai/architecture/): how missions flow
+- [Security](https://jarwis.ai/security/): guardrails and approvals
