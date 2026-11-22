@@ -3,7 +3,7 @@
 
 ## Pages
 - [Home](https://jarwis-six.vercel.app/): overview
-- [Command center](https://jarwis-six.vercel.app/command-center/): live preview
+- [Mission control](https://jarwis-six.vercel.app/command-center/): goal to combined plan with specialist assistants
 - [Status](https://jarwis-six.vercel.app/status/): live checks
 - [Roadmap](https://jarwis-six.vercel.app/roadmap/): what ships next
 - [Builder](https://jarwis-six.vercel.app/builder/): who built Jarwis

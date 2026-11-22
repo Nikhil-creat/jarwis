@@ -1,5 +1,5 @@
 """Vercel serverless function: GET lists auto-detected models, POST chats. Keys come from Vercel env vars."""
-import json, os, re, time, urllib.request
+import json, os, re, time, urllib.error, urllib.request
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
@@ -38,16 +38,22 @@ IQ = ("You are the Interview Prep Coach assistant of Jarwis. Return ONLY a JSON 
 IFB = ("You are an honest interview coach. Return ONLY one JSON object {\"score\": integer 1 to 10, \"strengths\": up to 3 short strings, \"improve\": up to 3 short strings, \"better\": a stronger sample answer under 120 words}. "
        "Judge the candidate's answer to the question for the role. Be specific. In the sample answer reuse only ideas from the candidate's answer plus general best practice, and do not invent employers or exact numbers.")
 D = lambda x: x if isinstance(x, dict) else {}
+MPLAN = ("You are Commander-00 of Jarwis. Break the user's goal into 3 to 5 independent tasks and assign each to the most suitable assistant from the list. "
+         "Each task must be doable on its own from the goal alone, with no dependency on another task. Use a different assistant for each task. "
+         "Return ONLY a JSON array of objects {\"assistant\": exact name from the list, \"task\": one clear sentence}. Assistants: ")
+MFINAL = ("You are Commander-00, the lead of Jarwis. The input is JSON with a goal and results from specialist assistants. Combine them into ONE clear deliverable in plain text with these sections, each starting with '## ': "
+          "Summary (2 sentences), Plan (numbered steps or a checklist that merges the specialists' work and removes duplicates), Risks and open questions, Next actions (3 to 5 items). "
+          "Use only what the specialists provided plus common sense. These are plans and drafts: never claim anything was deployed, sent or completed outside this page. Keep it under 450 words.")
 _C = {"t": 0, "v": {}}
 RL = {}
 
 def score(pid, tier):
     m, s = pid.lower(), 0
-    table = ((("gpt-oss-120b", 9), ("70b", 8), ("pro", 8), ("120b", 8), ("deepseek", 5), ("qwen", 5), ("flash", 4), ("8b", 1))
+    table = ((("gpt-oss-120b", 9), (r"(?<!\d)70b", 8), ("pro", 8), (r"(?<!\d)120b", 8), ("deepseek", 5), ("qwen", 5), ("flash", 4), (r"(?<!\d)8b", 1))
              if tier == "deep" else
-             (("flash-lite", 9), ("instant", 9), ("8b", 8), ("flash", 7), ("mini", 6), ("20b", 5), ("70b", 3)))
+             (("flash-lite", 9), ("instant", 9), (r"(?<!\d)8b", 8), ("flash", 7), ("mini", 6), (r"(?<!\d)20b", 5), (r"(?<!\d)70b", 3)))
     for k, v in table:
-        if k in m: s = max(s, v)
+        if re.search(k, m): s = max(s, v)
     if "preview" in m or "exp" in m: s -= 2
     v = re.search(r"-(\d\.\d)", m)
     return s + (float(v.group(1)) * 0.1 if v else 0)
@@ -72,13 +78,22 @@ def complete(messages, tier, max_tokens=700):
     det, last = detect(), "no provider configured"
     for p in [x for x in ("groq", "gemini") if x in det]:
         url, env = P[p]
-        body = json.dumps({"model": det[p][tier], "messages": messages, "max_tokens": max_tokens, "temperature": 0.4}).encode()
-        req = urllib.request.Request(url + "/chat/completions", body, {"Authorization": "Bearer " + os.environ[env], "Content-Type": "application/json", "User-Agent": "jarwis/1.0"})
-        try:
-            j = json.load(urllib.request.urlopen(req, timeout=28))
-            return j["choices"][0]["message"]["content"], p, det[p][tier]
-        except Exception as e:
-            last = str(e)
+        model = det[p][tier]
+        base = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.4}
+        variants = [dict(base, reasoning_effort="low" if tier == "fast" else "medium"), base] if p == "groq" and "gpt-oss" in model else [base]
+        for body in variants:
+            req = urllib.request.Request(url + "/chat/completions", json.dumps(body).encode(), {"Authorization": "Bearer " + os.environ[env], "Content-Type": "application/json", "User-Agent": "jarwis/1.0"})
+            try:
+                text = json.load(urllib.request.urlopen(req, timeout=28))["choices"][0]["message"]["content"]
+                if text: return text, p, model
+                last = "empty reply"
+                break
+            except urllib.error.HTTPError as e:
+                last = str(e)
+                if e.code != 400: break
+            except Exception as e:
+                last = str(e)
+                break
     raise RuntimeError(last)
 
 class handler(BaseHTTPRequestHandler):
@@ -99,7 +114,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             n = min(int(self.headers.get("content-length", 0)), 30000)
             j = json.loads(self.rfile.read(n) or b"{}")
-            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode in ("resume", "cover") else 4000 if mode in ("iq", "ifb") else 1500]
+            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode in ("resume", "cover", "mission_final", "mission_plan") else 4000 if mode in ("iq", "ifb") else 1500]
             if not m.strip(): return self._send(400, {"reply": "Say something first."})
             if mode == "cover":
                 text, p, mod = complete([{"role": "system", "content": COVER}, {"role": "user", "content": m}], "deep", 1500)
@@ -122,6 +137,18 @@ class handler(BaseHTTPRequestHandler):
                 a, b = text.find("{"), text.rfind("}")
                 return self._send(200, {"resume": clean_resume(json.loads(text[a:b + 1])), "provider": p, "model": mod})
             clean = lambda s, k: re.sub(r"[^\w .,&/+'()-]", "", str(s))[:k]
+            if mode == "mission_plan":
+                d = D(json.loads(m))
+                names = [clean(x, 60) for x in (d.get("names") or [])[:120]]
+                text, p, mod = complete([{"role": "system", "content": MPLAN + "; ".join(names)}, {"role": "user", "content": S(d.get("goal"), 600)}], "deep", 1500)
+                arr = json.loads(text[text.find("["):text.rfind("]") + 1])
+                steps = [{"a": S(D(x).get("assistant"), 60), "t": S(D(x).get("task"), 300)} for x in (arr if isinstance(arr, list) else [])[:6]]
+                steps = [x for x in steps if x["a"] in names and x["t"]]
+                if len(steps) < 2: raise ValueError("bad plan")
+                return self._send(200, {"steps": steps, "provider": p, "model": mod})
+            if mode == "mission_final":
+                text, p, mod = complete([{"role": "system", "content": MFINAL}, {"role": "user", "content": m}], "deep", 1800)
+                return self._send(200, {"reply": text.strip()[:6000], "provider": p, "model": mod})
             hist = [{"role": h["role"], "content": str(h.get("content", ""))[:1000]} for h in (j.get("history") or [])[-8:] if isinstance(h, dict) and h.get("role") in ("user", "assistant")]
             sysmsg, tier = SYS, "fast"
             if mode == "plan": sysmsg, tier, hist = PLAN, "deep", []
@@ -133,7 +160,7 @@ class handler(BaseHTTPRequestHandler):
                 sysmsg = (f"You are the {clean(a.get('name'), 60)} assistant on the Jarwis platform (cluster: {clean(a.get('cluster'), 40)}; tools: {clean(a.get('tools'), 300)}). "
                           "Stay in this specialist role, give practical step-by-step help, ask one clarifying question if the request is vague, keep answers under 200 words, "
                           "and never claim to have run tools or taken actions you cannot take. Risky actions need the user's approval.")
-                tier = "deep" if len(m) > 400 else "fast"
+                tier = j.get("tier") if j.get("tier") in ("fast", "deep") else ("deep" if len(m) > 400 else "fast")
                 hist = [{"role": h["role"], "content": str(h.get("content", ""))[:1000]} for h in (j.get("history") or [])[-8:] if isinstance(h, dict) and h.get("role") in ("user", "assistant")]
             text, p, mod = complete([{"role": "system", "content": sysmsg}] + hist + [{"role": "user", "content": m}], tier)
             self._send(200, {"reply": text, "provider": p, "model": mod})
