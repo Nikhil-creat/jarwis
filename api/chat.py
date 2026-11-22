@@ -114,7 +114,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             n = min(int(self.headers.get("content-length", 0)), 30000)
             j = json.loads(self.rfile.read(n) or b"{}")
-            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode in ("resume", "cover", "mission_final", "mission_plan") else 4000 if mode in ("iq", "ifb") else 1500]
+            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode in ("resume", "cover", "mission_final", "mission_plan") else 4000 if mode in ("iq", "ifb") else 3500 if isinstance(j.get("assistant"), dict) else 1500]
             if not m.strip(): return self._send(400, {"reply": "Say something first."})
             if mode == "cover":
                 text, p, mod = complete([{"role": "system", "content": COVER}, {"role": "user", "content": m}], "deep", 1500)

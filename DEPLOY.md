@@ -31,3 +31,6 @@ Then open https://jarwis-six.vercel.app/status/ after Vercel finishes. The line 
 
 ## Which address to open
 Always test on https://jarwis-six.vercel.app (the main address). Vercel also shows long addresses with random letters, for example ending in -nikhil-creats-projects.vercel.app. Those are frozen copies of one old deployment, so they never show your latest work.
+
+## Live data sources
+No keys are needed. Sources: GitHub API, Open-Meteo, Frankfurter, Hacker News API, Crossref, Wikipedia. Open-Meteo is free for non-commercial use and needs the credit line that is already on the Live data page. If you ever make the site commercial, check each source's terms first.
