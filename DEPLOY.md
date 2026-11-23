@@ -34,3 +34,19 @@ Always test on https://jarwis-six.vercel.app (the main address). Vercel also sho
 
 ## Live data sources
 No keys are needed. Sources: GitHub API, Open-Meteo, Frankfurter, Hacker News API, Crossref, Wikipedia. Open-Meteo is free for non-commercial use and needs the credit line that is already on the Live data page. If you ever make the site commercial, check each source's terms first.
+
+## Adding API keys (all keys live in Vercel, never in GitHub)
+1. Open https://vercel.com and your `jarwis` project.
+2. Settings -> Environment Variables -> add each key below. Choose all three environments (Production, Preview, Development) and save.
+3. Deployments -> the latest one -> the three dots -> Redeploy. Keys only take effect after a redeploy.
+4. Open https://jarwis-six.vercel.app/status/ . The line "Key-based live data tools on" lists what is active.
+
+| Variable | Where to get it (free) | Powers |
+|---|---|---|
+| GROQ_API_KEY | console.groq.com/keys | AI chat |
+| GEMINI_API_KEY | aistudio.google.com/app/apikey | AI chat fallback |
+| ADZUNA_APP_ID and ADZUNA_APP_KEY | developer.adzuna.com (register) | Job search. Optional ADZUNA_COUNTRY, default in |
+| FINNHUB_API_KEY | finnhub.io (register, dashboard) | US stock quotes |
+| CALORIENINJAS_API_KEY | calorieninjas.com (sign up) | Nutrition facts |
+
+Never paste a key into a chat, a file in this repo, or a screenshot. If one leaks, regenerate it and update Vercel.

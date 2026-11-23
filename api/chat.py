@@ -1,5 +1,5 @@
 """Vercel serverless function: GET lists auto-detected models, POST chats. Keys come from Vercel env vars."""
-import json, os, re, time, urllib.error, urllib.request
+import json, os, re, time, urllib.error, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
@@ -96,6 +96,49 @@ def complete(messages, tier, max_tokens=700):
                 break
     raise RuntimeError(last)
 
+TOOLENV = {"jobs": ("ADZUNA_APP_ID", "ADZUNA_APP_KEY"), "stock": ("FINNHUB_API_KEY",), "food": ("CALORIENINJAS_API_KEY",)}
+def tools_on(): return [k for k, v in TOOLENV.items() if all(os.environ.get(e) for e in v)]
+def _get(url, headers=None, timeout=9):
+    req = urllib.request.Request(url, headers=dict({"User-Agent": "jarwis/1.0", "Accept": "application/json"}, **(headers or {})))
+    return json.load(urllib.request.urlopen(req, timeout=timeout))
+def _clean(x, k=80): return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", str(x or ""))).strip()[:k]
+def tool_jobs(q):
+    cc = re.sub(r"[^a-z]", "", os.environ.get("ADZUNA_COUNTRY", "in").lower())[:2] or "in"
+    qs = urllib.parse.urlencode({"app_id": os.environ["ADZUNA_APP_ID"], "app_key": os.environ["ADZUNA_APP_KEY"], "what": q, "results_per_page": 5, "content-type": "application/json"})
+    d = D(_get("https://api.adzuna.com/v1/api/jobs/%s/search/1?%s" % (cc, qs)))
+    rs = d.get("results") or []
+    if not rs: raise ValueError("No jobs found for that search. Try a broader job title.")
+    rows = []
+    for r in rs[:5]:
+        r = D(r); sal = ""
+        if r.get("salary_min") and r.get("salary_max"): sal = " | salary %d to %d (local currency)" % (r["salary_min"], r["salary_max"])
+        rows.append("%s at %s, %s%s | posted %s | %s" % (_clean(r.get("title")), _clean(D(r.get("company")).get("display_name"), 50), _clean(D(r.get("location")).get("display_name"), 50), sal, _clean(r.get("created"), 10), _clean(r.get("redirect_url"), 140)))
+    return {"text": 'Job listings for "%s" (Adzuna, about %s matches): ' % (_clean(q, 50), d.get("count", "many")) + " || ".join(rows), "link": "https://www.adzuna.com/", "source": "Adzuna"}
+def tool_stock(q):
+    key, q = os.environ["FINNHUB_API_KEY"], q.strip()
+    sym = q.upper() if re.fullmatch(r"[A-Za-z.\-]{1,6}", q) else None
+    if not sym:
+        res = D(_get("https://finnhub.io/api/v1/search?" + urllib.parse.urlencode({"q": q, "token": key}))).get("result") or []
+        res = [x for x in res if D(x).get("type") == "Common Stock"] or res
+        if not res: raise ValueError("No stock found. Try a US ticker such as AAPL.")
+        sym = _clean(D(res[0]).get("symbol"), 12)
+    d = D(_get("https://finnhub.io/api/v1/quote?" + urllib.parse.urlencode({"symbol": sym, "token": key})))
+    if not d.get("c"): raise ValueError("No quote for that symbol. The free plan covers US stocks.")
+    return {"text": "%s: price %s (change %s, %s%%), day range %s to %s, open %s, previous close %s. Free quotes cover US stocks and can be delayed. This is information, not financial advice." % (sym, d.get("c"), d.get("d"), d.get("dp"), d.get("l"), d.get("h"), d.get("o"), d.get("pc")), "link": "https://finnhub.io/", "source": "Finnhub"}
+def tool_food(q):
+    d = D(_get("https://api.calorieninjas.com/v1/nutrition?" + urllib.parse.urlencode({"query": q[:200]}), {"X-Api-Key": os.environ["CALORIENINJAS_API_KEY"]}))
+    items = d.get("items") or []
+    if not items: raise ValueError("No food found. Try: 2 eggs and 1 cup of rice")
+    keys = (("calories", "kcal"), ("protein_g", "g protein"), ("carbohydrates_total_g", "g carbs"), ("fat_total_g", "g fat"), ("sugar_g", "g sugar"), ("fiber_g", "g fibre"), ("sodium_mg", "mg sodium"))
+    rows = []
+    for it in items[:8]:
+        it = D(it)
+        vals = ", ".join("%s %s" % (round(it[k], 1), u) for k, u in keys if isinstance(it.get(k), (int, float)))
+        rows.append("%s (%s g serving): %s" % (_clean(it.get("name"), 40), it.get("serving_size_g", "?"), vals or "no numbers on this plan"))
+    tot = sum(D(i).get("calories") for i in items if isinstance(D(i).get("calories"), (int, float)))
+    return {"text": "Nutrition estimate (CalorieNinjas): " + " | ".join(rows) + (" | total about %d kcal" % tot if tot else ""), "link": "https://calorieninjas.com/", "source": "CalorieNinjas"}
+TOOLS = {"jobs": tool_jobs, "stock": tool_stock, "food": tool_food}
+
 class handler(BaseHTTPRequestHandler):
     def _send(self, code, obj):
         b = json.dumps(obj).encode()
@@ -103,7 +146,7 @@ class handler(BaseHTTPRequestHandler):
         for k, v in (("Content-Type", "application/json"), ("Cache-Control", "no-store"), ("Content-Length", str(len(b)))): self.send_header(k, v)
         self.end_headers(); self.wfile.write(b)
     def do_GET(self):
-        d = detect(); self._send(200, {"ready": bool(d), "providers": d, "version": "2026-11-21-resume"})
+        d = detect(); self._send(200, {"ready": bool(d), "providers": d, "tools": tools_on(), "version": "2026-11-22-tools"})
     def do_POST(self):
         ip, now = self.headers.get("x-forwarded-for", "?").split(",")[0], time.time()
         RL[ip] = [t for t in RL.get(ip, []) if now - t < 60] + [now]
@@ -137,6 +180,13 @@ class handler(BaseHTTPRequestHandler):
                 a, b = text.find("{"), text.rfind("}")
                 return self._send(200, {"resume": clean_resume(json.loads(text[a:b + 1])), "provider": p, "model": mod})
             clean = lambda s, k: re.sub(r"[^\w .,&/+'()-]", "", str(s))[:k]
+            if mode == "tool":
+                d = D(json.loads(m)); k = d.get("tool"); q = S(d.get("q"), 200).strip()
+                if k not in TOOLS or k not in tools_on(): return self._send(404, {"reply": "That live data tool is not set up on this site yet."})
+                if len(q) < 2: return self._send(400, {"reply": "Type what to look up first."})
+                try: return self._send(200, TOOLS[k](q))
+                except ValueError as e: return self._send(404, {"reply": str(e)})
+                except Exception: return self._send(502, {"reply": "The live data service did not answer. Try again in a moment."})
             if mode == "mission_plan":
                 d = D(json.loads(m))
                 names = [clean(x, 60) for x in (d.get("names") or [])[:120]]

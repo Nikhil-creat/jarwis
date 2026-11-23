@@ -5,14 +5,20 @@ weather:{label:'City',ph:'e.g. Hyderabad',src:'Open-Meteo.com',url:'https://open
 fx:{label:'Amount and currencies',ph:'e.g. 100 USD to INR',src:'Frankfurter',url:'https://frankfurter.dev'},
 hn:{label:'Topic filter (optional)',ph:'e.g. AI',src:'Hacker News API',url:'https://github.com/HackerNews/API'},
 papers:{label:'Research topic',ph:'e.g. retrieval augmented generation',src:'Crossref',url:'https://www.crossref.org/documentation/retrieve-metadata/rest-api/'},
-wiki:{label:'Topic',ph:'e.g. Binary search',src:'Wikipedia',url:'https://en.wikipedia.org/api/rest_v1/'}};
+wiki:{label:'Topic',ph:'e.g. Binary search',src:'Wikipedia',url:'https://en.wikipedia.org/api/rest_v1/'},
+jobs:{label:'Job title or skill',ph:'e.g. data analyst intern',src:'Adzuna',url:'https://www.adzuna.com/',server:1},
+stock:{label:'US stock ticker or company',ph:'e.g. AAPL or Microsoft',src:'Finnhub',url:'https://finnhub.io/',server:1},
+food:{label:'Food and quantity',ph:'e.g. 2 eggs and 1 cup of rice',src:'CalorieNinjas',url:'https://calorieninjas.com/',server:1}};
 const MAP={github:['GitHub Portfolio Curator','Git & GitHub Fixer','Open-Source Maintainer'],
 weather:['Time-Blocker','Route Planner','Wellness Advisor','Event Coordinator','Errand Scout','Fitness & Habit Coach'],
 fx:['Budget Watchdog','Personal Finance Planner','Cashflow Modeler','Fuel & Expense Tracker','Pricing Strategist','Unit Economics Analyst','Freelance Proposal Writer'],
 hn:['Trend Scout','Launch Strategist','Startup Ops Advisor','Growth Experimenter','Vendor Evaluator','Startup Pitch Reviewer'],
 papers:['Deep Researcher','Citation Verifier','Paper & Repo Summarizer','Research Paper Writer','LLM Eval Judge','ML Training Engineer'],
+jobs:['Job & Internship Scout','Resume & Career Coach','LinkedIn Profile Optimizer','Interview Prep Coach'],
+stock:['Decision Analyst','Risk Assessor','Scenario Modeler','Cashflow Modeler'],
+food:['Wellness Advisor','Fitness & Habit Coach','Shopping Coordinator'],
 wiki:['Study Tutor','Math & Stats Tutor','Language Practice Partner','Placement Aptitude Tutor','Cybersecurity Mentor','Brainstorm Partner']};
-const toolOf=n=>Object.keys(MAP).find(k=>MAP[k].includes(n))||null;
+const on=new Set(),toolsOf=n=>Object.keys(MAP).filter(k=>MAP[k].includes(n)&&(!TOOLS[k].server||on.has(k))),toolOf=n=>toolsOf(n)[0]||null;
 const J=async(u,ms)=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),ms||9000);try{const r=await fetch(u,{signal:c.signal});if(!r.ok)throw new Error('The service answered with HTTP '+r.status+'.');return await r.json()}catch(e){throw new Error(e.name==='AbortError'?'The service took too long to answer.':e.message)}finally{clearTimeout(t)}};
 const E=encodeURIComponent,cut=(s,n)=>String(s||'').replace(/\s+/g,' ').trim().slice(0,n);
 const WC=c=>c===0?'clear':c<=3?'partly cloudy':c<=48?'fog':c<=57?'drizzle':c<=67?'rain':c<=77?'snow':c<=82?'rain showers':c<=86?'snow showers':'thunderstorm';
@@ -40,7 +46,9 @@ async papers(v){const q=v.trim();if(q.length<3)throw new Error('Enter a research
 return{link:'https://search.crossref.org/?q='+E(q),text:'Scholarly results for "'+cut(q,60)+'" (Crossref): '+it.map(i=>cut((i.title||['Untitled'])[0],110)+' ('+(((i.issued||{})['date-parts']||[[]])[0][0]||'n/a')+', '+cut((i['container-title']||['n/a'])[0],50)+', '+(i['is-referenced-by-count']||0)+' citations) https://doi.org/'+i.DOI).join(' | ')}},
 async wiki(v){const q=v.trim();if(!q)throw new Error('Enter a topic.');const s=await J('https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&format=json&origin=*&search='+E(q)),t=(s[1]||[])[0];if(!t)throw new Error('No Wikipedia article found.');
 const d=await J('https://en.wikipedia.org/api/rest_v1/page/summary/'+E(t.replace(/ /g,'_')));return{link:(d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page)||'https://en.wikipedia.org/',text:'Wikipedia: '+cut(d.title,80)+' - '+cut(d.extract,900)}}};
-const go=async(k,v)=>{if(!run[k])throw new Error('Unknown tool.');const r=await run[k](v||'');r.text=cut(r.text.replace(/ \| /g,' | '),1500).length<r.text.length?r.text.slice(0,1500):r.text;return r};
-const api={TOOLS,MAP,toolOf,run:go};
+const srv=async(k,v)=>{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'tool',message:JSON.stringify({tool:k,q:v})})}),j=await r.json().catch(()=>({}));if(!r.ok||!j.text)throw new Error(j.reply||'The live data service did not answer.');return{text:j.text,link:j.link}};
+const go=async(k,v)=>{if(TOOLS[k]&&TOOLS[k].server){const r=await srv(k,v||'');r.text=r.text.slice(0,1500);return r}if(!run[k])throw new Error('Unknown tool.');const r=await run[k](v||'');r.text=cut(r.text.replace(/ \| /g,' | '),1500).length<r.text.length?r.text.slice(0,1500):r.text;return r};
+const api={TOOLS,MAP,toolOf,toolsOf,on,run:go,ready:Promise.resolve()};
+if(typeof window!=='undefined'&&typeof fetch==='function')api.ready=fetch('/api/chat').then(r=>r.json()).then(d=>{(d.tools||[]).forEach(k=>on.add(k))}).catch(()=>{});
 if(typeof window!=='undefined')window.JWTools=api;else module.exports=api;
 })();
