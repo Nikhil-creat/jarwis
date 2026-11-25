@@ -8,6 +8,7 @@
 - [Roadmap](https://jarwis-six.vercel.app/roadmap/): what ships next
 - [Builder](https://jarwis-six.vercel.app/builder/): who built Jarwis
 - [Resume builder](https://jarwis-six.vercel.app/resume/): ATS-friendly one-page resumes and cover letters
+- [Studio](https://jarwis-six.vercel.app/studio/): AI document editing, PDF and Word export, diagrams, images and photo editing
 - [Live data tools](https://jarwis-six.vercel.app/tools/): free public APIs used by assistants
 - [Interview practice](https://jarwis-six.vercel.app/interview/): tailored questions with AI feedback
 - [FAQ](https://jarwis-six.vercel.app/faq/): common questions

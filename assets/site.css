@@ -79,3 +79,7 @@ footer{background:var(--ink);color:#c7ccd3;padding:40px 8.9vw;font-size:13px;dis
 .ah a.tla{color:var(--hot);font:500 12px var(--sans);text-decoration:none;margin-left:auto;margin-right:12px}.cpb{border:0;background:none;color:var(--hot);font:500 11px var(--sans);cursor:pointer;margin-left:8px}
 .old{background:#FF5A1F;color:#fff;padding:10px 16px;text-align:center;font:500 13px var(--sans)}.old a{color:#fff;text-decoration:underline}
 [data-theme=dark] .sc{background:#171A1F}
+#jw-print{display:none}
+@media print{body.jw-printing>*:not(#jw-print){display:none!important}body.jw-printing #jw-print{display:block!important;font:11pt/1.4 Arial,sans-serif;color:#000;background:#fff;padding:0}#jw-print h1{font-size:18pt}#jw-print h2{font-size:13pt;margin:14pt 0 4pt}}
+.vis img,.vis canvas{max-width:100%;border-radius:12px;background:#fff;display:block;margin:8px 0}.nt{font-size:12px;color:var(--muted);margin:2px 0}.stu select.in,.rfm select.in{max-width:none}
+.mdoc{font-size:14.5px}[data-theme=dark] .vis img{background:#fff}

@@ -1,7 +1,7 @@
 """Pre-push check: run `python3 check.py` inside the project folder."""
 import os, re, sys
 need = ["index.html", "404.html", "faq/index.html", "contact/index.html", "resume/index.html", "assistants/index.html",
-        "api/chat.py", "assets/ai.js", "assets/resume.js", "assets/interview.js", "assets/mission.js", "assets/tools.js", "tools/index.html", "interview/index.html", "assets/site.css", "sitemap.xml", "robots.txt", "llms.txt",
+        "api/chat.py", "assets/ai.js", "assets/resume.js", "assets/interview.js", "assets/mission.js", "assets/tools.js", "assets/export.js", "assets/studio.js", "studio/index.html", "tools/index.html", "interview/index.html", "assets/site.css", "sitemap.xml", "robots.txt", "llms.txt",
         "favicon.ico", "og.png", "vercel.json"]
 bad = [f"missing file: {f}" for f in need if not os.path.exists(f)]
 api = open("api/chat.py").read() if os.path.exists("api/chat.py") else ""

@@ -16,10 +16,11 @@ Designed and developed by **Nikhil Chary Sriramoju**.
 | Assistants | Commander-00 plus 99 assistants in six clusters. Search, filter, chat with any of them, route a task with AI, or forge your own |
 | AI | Vercel function `api/chat.py`. Auto-detects Groq and Gemini models, picks a fast and a deep model, falls back between providers |
 | Resume builder | Asks for a few details, then writes a one-page, ATS-friendly resume tailored to a pasted job description. Shows a keyword match score and an ATS checklist, exports PDF, .doc and .txt, and has an offline quick draft |
-| Mission control | Goal in, 2 to 5 specialists work in parallel, one combined plan out; approval before saving or exporting |
+| Mission control | Agentic loop: the Commander picks 3 to 8 specialists from the 99 and gives some of them live data tools, they work in parallel (with one automatic retry), a reviewer scores the result and fixes weak spots, then you copy, edit, revise with AI, export or approve it |
 | Cover letter | One click from the resume page: a short honest cover letter written from the same facts |
 | Interview practice | Six tailored questions, you type answers, and get a score plus specific improvements |
 | Live data tools | 34 assistants can fetch real data from free, keyless public APIs before answering (42 with optional keyed sources: Adzuna jobs, Finnhub US stocks, CalorieNinjas nutrition): GitHub profiles, weather (Open-Meteo), currency rates (Frankfurter), Hacker News, Crossref papers and Wikipedia |
+| Studio | Edit a document with AI (shorten, simplify, formal, translate), export to PDF, Word-compatible .doc, Markdown and text, draw diagrams as SVG or PNG, generate art (free Pollinations service), and edit photos fully in the browser |
 | Command center | Plan a mission with AI, run it with checkpoints, a token budget governor, an approval gate and saved missions |
 | Chat dock | Multi-turn, voice input, spoken replies, saved history with Clear |
 | Experience | Dark mode, Ctrl/Cmd+K page jumper, installable offline app (PWA), responsive mobile menu |

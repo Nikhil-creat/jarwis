@@ -1,5 +1,7 @@
 """Vercel serverless function: GET lists auto-detected models, POST chats. Keys come from Vercel env vars."""
 import json, os, re, time, urllib.error, urllib.parse, urllib.request
+import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
@@ -44,6 +46,29 @@ MPLAN = ("You are Commander-00 of Jarwis. Break the user's goal into 3 to 5 inde
 MFINAL = ("You are Commander-00, the lead of Jarwis. The input is JSON with a goal and results from specialist assistants. Combine them into ONE clear deliverable in plain text with these sections, each starting with '## ': "
           "Summary (2 sentences), Plan (numbered steps or a checklist that merges the specialists' work and removes duplicates), Risks and open questions, Next actions (3 to 5 items). "
           "Use only what the specialists provided plus common sense. These are plans and drafts: never claim anything was deployed, sent or completed outside this page. Keep it under 450 words.")
+MPLAN2 = ("You are Commander-00 of Jarwis. Break the user's goal into {lo} to {hi} independent tasks and assign each to the most suitable assistant from the list. "
+          "Each task must be doable alone from the goal, with no dependency on another task. Use a different assistant for each task. "
+          "When real data would help (for example a job search, a forecast, exchange rates, a GitHub profile), you may attach ONE live data tool to that task using a tool id from the Tools list, with a short search text in query. Never invent tool ids. "
+          "Return ONLY a JSON array of objects {{\"assistant\": exact name from the list, \"task\": one clear sentence, \"tool\": optional tool id, \"query\": optional search text}}. ")
+MREVIEW = ("You are a strict reviewer. The input is JSON with a goal and a draft deliverable. Return ONLY one JSON object {\"score\": integer 1 to 10 for how well the draft achieves the goal, \"issues\": up to 4 short, specific problems such as missing steps, vague advice, contradictions or unrealistic claims}. Be honest; give 8 or more only if it is genuinely strong.")
+MREVISE = ("You are the Editor of Jarwis. Apply the instruction to the text. Keep the structure and any '## ' section headings unless the instruction says otherwise. Do not add facts that are not in the text or common knowledge, and never claim that anything was sent, deployed or done outside this page. Return ONLY the revised text.")
+SVGP = ("You are a visual designer. Return ONLY one standalone SVG document, no markdown and no explanation. Rules: viewBox=\"0 0 800 600\" and no width or height attributes; font-family Arial; text at least 14px and readable; high-contrast colours on a light background; simple shapes, arrows and labels; no scripts, no external images or links, no foreignObject. If an existing SVG and an edit instruction are given, return the complete updated SVG.")
+def clean_svg(s):
+    s = str(s or ""); a, b = s.find("<svg"), s.rfind("</svg>")
+    if a < 0 or b < 0: return ""
+    s = s[a:b + 6]
+    if re.search(r"<!DOCTYPE|<!ENTITY", s, re.I): return ""
+    s = re.sub(r"<script[\s\S]*?</script>", "", s, flags=re.I)
+    s = re.sub(r"<(foreignObject|iframe|object|embed|image|audio|video|animate|set)[\s\S]*?(</\1>|/>)", "", s, flags=re.I)
+    s = re.sub(r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*')", "", s, flags=re.I)
+    s = re.sub(r"javascript:", "", s, flags=re.I)
+    s = re.sub(r"(xlink:)?href\s*=\s*(\"(?!#)[^\"]*\"|'(?!#)[^']*')", "", s, flags=re.I)
+    s = re.sub(r"@import[^;]*;?", "", s, flags=re.I)
+    s = re.sub(r"url\(\s*['\"]?\s*(https?:|data:|//)[^)]*\)", "none", s, flags=re.I)
+    if "xmlns=" not in s[:200]: s = s.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"', 1)
+    try: ET.fromstring(s)
+    except ET.ParseError: return ""
+    return s if len(s) <= 30000 else ""
 _C = {"t": 0, "v": {}}
 RL = {}
 
@@ -58,19 +83,22 @@ def score(pid, tier):
     v = re.search(r"-(\d\.\d)", m)
     return s + (float(v.group(1)) * 0.1 if v else 0)
 
+def _models(name):
+    url, env = P[name]
+    key = os.environ.get(env)
+    if not key: return name, None
+    try:
+        req = urllib.request.Request(url + "/models", headers={"Authorization": "Bearer " + key, "User-Agent": "jarwis/1.0"})
+        ids = [d["id"].replace("models/", "") for d in json.load(urllib.request.urlopen(req, timeout=5))["data"] if not BAD.search(d["id"])]
+        if ids: return name, {"fast": max(ids, key=lambda i: score(i, "fast")), "deep": max(ids, key=lambda i: score(i, "deep")), "count": len(ids)}
+    except Exception:
+        pass
+    return name, None
+
 def detect():
     if _C["v"] and time.time() - _C["t"] < 600: return _C["v"]
-    out = {}
-    for name, (url, env) in P.items():
-        key = os.environ.get(env)
-        if not key: continue
-        try:
-            req = urllib.request.Request(url + "/models", headers={"Authorization": "Bearer " + key, "User-Agent": "jarwis/1.0"})
-            ids = [d["id"].replace("models/", "") for d in json.load(urllib.request.urlopen(req, timeout=6))["data"] if not BAD.search(d["id"])]
-            if ids:
-                out[name] = {"fast": max(ids, key=lambda i: score(i, "fast")), "deep": max(ids, key=lambda i: score(i, "deep")), "count": len(ids)}
-        except Exception:
-            pass
+    with ThreadPoolExecutor(2) as ex: res = list(ex.map(_models, list(P)))
+    out = {n: v for n, v in res if v}
     _C.update(t=time.time(), v=out)
     return out
 
@@ -146,18 +174,18 @@ class handler(BaseHTTPRequestHandler):
         for k, v in (("Content-Type", "application/json"), ("Cache-Control", "no-store"), ("Content-Length", str(len(b)))): self.send_header(k, v)
         self.end_headers(); self.wfile.write(b)
     def do_GET(self):
-        d = detect(); self._send(200, {"ready": bool(d), "providers": d, "tools": tools_on(), "version": "2026-11-22-tools"})
+        d = detect(); self._send(200, {"ready": bool(d), "providers": d, "tools": tools_on(), "version": "2026-11-23-tools-studio"})
     def do_POST(self):
         ip, now = self.headers.get("x-forwarded-for", "?").split(",")[0], time.time()
         RL[ip] = [t for t in RL.get(ip, []) if now - t < 60] + [now]
-        if len(RL[ip]) > 20: return self._send(429, {"reply": "Slow down a little and try again in a minute."})
+        if len(RL[ip]) > 30: return self._send(429, {"reply": "Slow down a little and try again in a minute."})
         org, host = self.headers.get("origin"), self.headers.get("host", "")
         extra = [x.strip() for x in os.environ.get("ALLOWED_ORIGIN", "").split(",") if x.strip()]
         if org and urlparse(org).netloc != host and org not in extra: return self._send(403, {"reply": "Origin not allowed."})
         try:
             n = min(int(self.headers.get("content-length", 0)), 30000)
             j = json.loads(self.rfile.read(n) or b"{}")
-            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode in ("resume", "cover", "mission_final", "mission_plan") else 4000 if mode in ("iq", "ifb") else 3500 if isinstance(j.get("assistant"), dict) else 1500]
+            mode = j.get("mode"); m = str(j.get("message", ""))[:12000 if mode in ("resume", "cover", "mission_final", "mission_plan", "mission_review", "mission_revise", "svg") else 4000 if mode in ("iq", "ifb") else 3500 if isinstance(j.get("assistant"), dict) else 1500]
             if not m.strip(): return self._send(400, {"reply": "Say something first."})
             if mode == "cover":
                 text, p, mod = complete([{"role": "system", "content": COVER}, {"role": "user", "content": m}], "deep", 1500)
@@ -190,12 +218,37 @@ class handler(BaseHTTPRequestHandler):
             if mode == "mission_plan":
                 d = D(json.loads(m))
                 names = [clean(x, 60) for x in (d.get("names") or [])[:120]]
-                text, p, mod = complete([{"role": "system", "content": MPLAN + "; ".join(names)}, {"role": "user", "content": S(d.get("goal"), 600)}], "deep", 1500)
+                tl = [D(x) for x in (d.get("tools") or [])[:14] if isinstance(x, dict)]
+                tools = {clean(x.get("id"), 20): clean(x.get("hint"), 80) for x in tl if clean(x.get("id"), 20)}
+                lo, hi = (5, 8) if d.get("depth") == "deep" else (3, 5)
+                sysm = MPLAN2.format(lo=lo, hi=hi) + "Assistants: " + "; ".join(names) + ". Tools: " + ("; ".join("%s = %s" % kv for kv in tools.items()) or "none")
+                text, p, mod = complete([{"role": "system", "content": sysm}, {"role": "user", "content": S(d.get("goal"), 600)}], "fast", 1800)
                 arr = json.loads(text[text.find("["):text.rfind("]") + 1])
-                steps = [{"a": S(D(x).get("assistant"), 60), "t": S(D(x).get("task"), 300)} for x in (arr if isinstance(arr, list) else [])[:6]]
-                steps = [x for x in steps if x["a"] in names and x["t"]]
+                steps = []
+                for x in (arr if isinstance(arr, list) else [])[:hi]:
+                    x = D(x); st = {"a": S(x.get("assistant"), 60), "t": S(x.get("task"), 300)}
+                    if st["a"] in names and st["t"] and st["a"] not in [s["a"] for s in steps]:
+                        tid = clean(x.get("tool"), 20)
+                        if tid in tools and S(x.get("query"), 120).strip(): st["tool"], st["q"] = tid, clean(x.get("query"), 120)
+                        steps.append(st)
                 if len(steps) < 2: raise ValueError("bad plan")
                 return self._send(200, {"steps": steps, "provider": p, "model": mod})
+            if mode == "mission_review":
+                text, p, mod = complete([{"role": "system", "content": MREVIEW}, {"role": "user", "content": m}], "fast", 1200)
+                o = D(json.loads(text[text.find("{"):text.rfind("}") + 1]))
+                try: sc = max(1, min(10, int(o.get("score"))))
+                except (TypeError, ValueError): sc = 7
+                return self._send(200, {"score": sc, "issues": [S(i, 200) for i in (o.get("issues") if isinstance(o.get("issues"), list) else [])[:4]], "provider": p, "model": mod})
+            if mode == "mission_revise":
+                d = D(json.loads(m))
+                text, p, mod = complete([{"role": "system", "content": MREVISE}, {"role": "user", "content": "INSTRUCTION: " + S(d.get("instruction"), 400) + "\n\nTEXT:\n" + S(d.get("text"), 8000)}], "deep", 2500)
+                return self._send(200, {"reply": text.strip()[:9000], "provider": p, "model": mod})
+            if mode == "svg":
+                d = D(json.loads(m)); cur = S(d.get("svg"), 12000)
+                text, p, mod = complete([{"role": "system", "content": SVGP}, {"role": "user", "content": S(d.get("prompt"), 800) + ("\n\nEXISTING SVG:\n" + cur if cur else "")}], "deep", 3500)
+                svg = clean_svg(text)
+                if not svg: return self._send(502, {"reply": "I could not draw that. Try a simpler description."})
+                return self._send(200, {"svg": svg, "provider": p, "model": mod})
             if mode == "mission_final":
                 text, p, mod = complete([{"role": "system", "content": MFINAL}, {"role": "user", "content": m}], "deep", 1800)
                 return self._send(200, {"reply": text.strip()[:6000], "provider": p, "model": mod})
